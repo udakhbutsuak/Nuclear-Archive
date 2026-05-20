@@ -284,26 +284,25 @@ renderer.setSize(window.innerWidth,window.innerHeight);
 renderer.setClearColor(0x000000,0);
 document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-// ─── OCEAN SPHERE (water body color under land) ───────────────────────────────
-const oceanGeo=new THREE.SphereGeometry(0.999,64,64);
+// ─── OCEAN SPHERE (vivid blue water bodies) ───────────────────────────────────
+const oceanGeo=new THREE.SphereGeometry(0.998,64,64);
 const oceanMat=new THREE.MeshPhongMaterial({
-  color:0x0a2a4a,      // deep ocean blue
-  emissive:0x051525,
-  specular:0x1a5080,
-  shininess:60,
-  transparent:false,
+  color:0x0a4a8a,      // rich ocean blue
+  emissive:0x041828,
+  specular:0x2288cc,
+  shininess:80,
 });
 scene.add(new THREE.Mesh(oceanGeo,oceanMat));
 
-// ─── LAND SPHERE ──────────────────────────────────────────────────────────────
+// ─── LAND SPHERE (sits on top of ocean, slightly smaller gaps show ocean at coasts) ──
 const globeGeo=new THREE.SphereGeometry(1.0,64,64);
 const globeMat=new THREE.MeshPhongMaterial({
-  color:0x0b1a0d,      // very dark green-grey for land
-  emissive:0x050e06,
-  specular:0x112211,
-  shininess:8,
+  color:0x0e2010,      // dark earthy green for land masses
+  emissive:0x060e07,
+  specular:0x0a180a,
+  shininess:5,
   transparent:true,
-  opacity:0.98,
+  opacity:0.97,
 });
 const globe=new THREE.Mesh(globeGeo,globeMat);
 scene.add(globe);
@@ -313,16 +312,13 @@ const atmGeo=new THREE.SphereGeometry(1.03,64,64);
 const atmMat=new THREE.MeshPhongMaterial({color:0x1155ff,transparent:true,opacity:0.04,side:THREE.BackSide});
 scene.add(new THREE.Mesh(atmGeo,atmMat));
 
-// Subtle lat/lon grid
-const wireGeo=new THREE.SphereGeometry(1.002,36,18);
-const wireMat=new THREE.MeshBasicMaterial({color:0x0d3020,wireframe:true,transparent:true,opacity:0.18});
-scene.add(new THREE.Mesh(wireGeo,wireMat));
+// (lat/lon wireframe removed — was causing animated blue flashing lines)
 
 // ─── LIGHTING ─────────────────────────────────────────────────────────────────
-scene.add(Object.assign(new THREE.AmbientLight(0xffffff),{intensity:0.22}));
-const sun=new THREE.DirectionalLight(0x4488ff,0.95);
+scene.add(Object.assign(new THREE.AmbientLight(0xffffff),{intensity:0.35}));
+const sun=new THREE.DirectionalLight(0x88aaff,1.1);
 sun.position.set(5,3,5); scene.add(sun);
-const fill=new THREE.DirectionalLight(0x001144,0.3);
+const fill=new THREE.DirectionalLight(0x002266,0.4);
 fill.position.set(-3,-2,-3); scene.add(fill);
 
 // ─── BORDER GROUP ─────────────────────────────────────────────────────────────
@@ -413,15 +409,10 @@ async function loadBorders(){
       drawGeoFeature(land,0x1e5535,0.75);
     }
 
-    // Draw country outlines
+    // Draw country outlines (all countries including India from world-atlas)
     countries.features.forEach(f=>{
-      // Skip India from world-atlas (we use our corrected version)
-      if(f.id==='356') return;
       drawGeoFeature(f,0x1a4a2a,0.5);
     });
-
-    // Draw corrected India border
-    drawBorderLine(INDIA_OVERRIDE,0x22aa55,0.85,1.004);
 
     document.getElementById('loading-borders').style.display='none';
   } catch(e){
@@ -676,32 +667,52 @@ function toggleExpand(){
 }
 
 // ─── AI CHAT ─────────────────────────────────────────────────────────────────
+const GEMINI_API_KEY = 'AIzaSyAQXRyuaqO6xzByMEW1X4imGYZPesa9MXQ'; // ← paste your key between the quotes
+
 async function sendChat(){
   const input=document.getElementById('chat-input');
   const q=input.value.trim(); if(!q)return;
   input.value='';
   appendMsg('user',q);
   const thinking=appendMsg('ai','…','thinking');
+
   const ctx=selectedEvent
-    ?`User is viewing: "${selectedEvent.name}" (${selectedEvent.year}, ${selectedEvent.country}, type: ${selectedEvent.type}, yield: ${selectedEvent.yield_kt} kt).`
+    ?`The user is currently viewing the event card for: "${selectedEvent.name}" (${selectedEvent.year}, ${selectedEvent.country}, type: ${selectedEvent.type}, yield: ${selectedEvent.yield_kt} kt).`
     :'No specific event selected.';
-  chatHistory.push({role:'user',content:q});
+
+  const systemPrompt=`You are a nuclear history expert and educator embedded in an interactive global nuclear archive. You have deep knowledge of nuclear weapons development, nuclear accidents, arms control treaties, Cold War history, radiation science, and the humanitarian impact of nuclear events. Context: ${ctx} Keep responses concise (2–4 sentences) but genuinely informative. Never trivialize the human cost of nuclear events.`;
+
+  // Build conversation history in Gemini format
+  const geminiHistory = chatHistory.map(m=>({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }]
+  }));
+
+  // Add current question
+  geminiHistory.push({ role:'user', parts:[{ text: q }] });
+  chatHistory.push({role:'user', content:q});
+
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:1000,
-        system:`You are a nuclear history expert and educator embedded in an interactive global nuclear archive. Deep knowledge of nuclear weapons, accidents, arms control treaties, Cold War history, radiation science, humanitarian impact. Context: ${ctx} Keep responses concise (2–4 sentences) but genuinely informative. Never trivialize human cost.`,
-        messages:chatHistory,
-      }),
-    });
+    const res=await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          system_instruction:{ parts:[{ text: systemPrompt }] },
+          contents: geminiHistory,
+          generationConfig:{ maxOutputTokens:400, temperature:0.7 }
+        }),
+      }
+    );
     const data=await res.json();
-    const reply=data.content?.map(b=>b.text||'').join('')||'Unable to get a response right now.';
-    chatHistory.push({role:'assistant',content:reply});
-    thinking.remove(); appendMsg('ai',reply);
-  }catch(err){thinking.remove();appendMsg('ai','Connection error. Please try again.');}
+    const reply=data.candidates?.[0]?.content?.parts?.[0]?.text || 'Unable to get a response right now.';
+    chatHistory.push({role:'assistant', content:reply});
+    thinking.remove(); appendMsg('ai', reply);
+  }catch(err){
+    thinking.remove();
+    appendMsg('ai','Connection error. Please check your API key and try again.');
+  }
 }
 
 function appendMsg(role,text,cls=''){
