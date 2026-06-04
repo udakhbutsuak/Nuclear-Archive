@@ -667,7 +667,7 @@ function toggleExpand(){
 }
 
 // ─── AI CHAT ─────────────────────────────────────────────────────────────────
-const GEMINI_API_KEY = '-'; // ← paste your key between the quotes
+const GROQ_API_KEY = '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'; // ← paste your key between the quotes
 
 async function sendChat(){
   const input=document.getElementById('chat-input');
@@ -693,20 +693,28 @@ async function sendChat(){
   chatHistory.push({role:'user', content:q});
 
   try{
-    const res=await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
+const res=await fetch(
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:{
+          'Content-Type':'application/json',
+          'Authorization':`Bearer ${GROQ_API_KEY}`
+        },
         body:JSON.stringify({
-          system_instruction:{ parts:[{ text: systemPrompt }] },
-          contents: geminiHistory,
-          generationConfig:{ maxOutputTokens:400, temperature:0.7 }
+          model:'llama3-8b-8192',
+          messages:[
+            {role:'system', content:systemPrompt},
+            ...chatHistory.slice(0,-1),
+            {role:'user', content:q}
+          ],
+          max_tokens:400,
+          temperature:0.7
         }),
       }
     );
     const data=await res.json();
-    const reply=data.candidates?.[0]?.content?.parts?.[0]?.text || 'Unable to get a response right now.';
+    const reply=data.choices?.[0]?.message?.content || 'Unable to get a response right now.';
     chatHistory.push({role:'assistant', content:reply});
     thinking.remove(); appendMsg('ai', reply);
   }catch(err){
