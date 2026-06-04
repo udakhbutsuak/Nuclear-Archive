@@ -112,7 +112,7 @@
   .meta-badge { font-family:var(--font-mono); font-size:11px; padding:4px 10px; border-radius:4px; border:1px solid; }
   .badge-year { border-color:rgba(255,255,255,0.2); color:rgba(255,255,255,0.7); }
   .badge-country { border-color:rgba(0,170,255,0.4); color:#00aaff; background:rgba(0,170,255,0.08); }
-  .badge-type-test { border-color:rgba(255,42,42,0.4); color:#ff6b6b; background:rgba(255,42,42,0.08); }
+  .badge-type-test { border-color:rgba(15,82,186,0.5); color:#4a8eff; background:rgba(15,82,186,0.1); }
   .badge-type-accident { border-color:rgba(255,115,0,0.4); color:#ff9442; background:rgba(255,115,0,0.08); }
   .badge-type-combat { border-color:rgba(200,20,20,0.5); color:#ff3333; background:rgba(200,20,20,0.18); }
   .badge-yield { border-color:rgba(255,200,0,0.3); color:#ffd700; background:rgba(255,200,0,0.06); }
@@ -180,7 +180,7 @@
 
 <div id="legend">
   <div class="legend-item" data-type="test" onclick="toggleFilter('test',this)">
-    <div class="legend-dot" style="background:#ff3333"></div>WEAPONS TEST
+    <div class="legend-dot" style="background:#0F52BA"></div>WEAPONS TEST
   </div>
   <div class="legend-item" data-type="accident" onclick="toggleFilter('accident',this)">
     <div class="legend-dot" style="background:#ff7300"></div>NUCLEAR ACCIDENT
@@ -487,7 +487,7 @@ addPoleMarker(-90,'S');  // South Pole
 })();
 
 // ─── EVENT MARKERS ───────────────────────────────────────────────────────────
-function typeColor(t){return t==='combat'?0xcc1111:t==='accident'?0xff7300:0xff2222;}
+function typeColor(t){return t==='combat'?0xcc1111:t==='accident'?0xff7300:0x0F52BA;}
 
 const markerMeshes=[];
 EVENTS.forEach(ev=>{
@@ -666,8 +666,8 @@ function toggleExpand(){
   document.getElementById('expand-label').textContent=isExpanded?'Collapse details':'Historical details & AI assistant';
 }
 
-// ─── AI CHAT ─────────────────────────────────────────────────────────────────
-const GROQ_API_KEY = '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'; // ← paste your key between the quotes
+// ─── AI CHAT (Groq) ──────────────────────────────────────────────────────────
+const GROQ_API_KEY = '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'; // ← paste your gsk_... key here
 
 async function sendChat(){
   const input=document.getElementById('chat-input');
@@ -677,46 +677,35 @@ async function sendChat(){
   const thinking=appendMsg('ai','…','thinking');
 
   const ctx=selectedEvent
-    ?`The user is currently viewing the event card for: "${selectedEvent.name}" (${selectedEvent.year}, ${selectedEvent.country}, type: ${selectedEvent.type}, yield: ${selectedEvent.yield_kt} kt).`
+    ?`The user is viewing: "${selectedEvent.name}" (${selectedEvent.year}, ${selectedEvent.country}, type: ${selectedEvent.type}, yield: ${selectedEvent.yield_kt} kt).`
     :'No specific event selected.';
 
-  const systemPrompt=`You are a nuclear history expert and educator embedded in an interactive global nuclear archive. You have deep knowledge of nuclear weapons development, nuclear accidents, arms control treaties, Cold War history, radiation science, and the humanitarian impact of nuclear events. Context: ${ctx} Keep responses concise (2–4 sentences) but genuinely informative. Never trivialize the human cost of nuclear events.`;
+  const systemPrompt=`You are a nuclear history expert and educator embedded in an interactive global nuclear archive. You have deep knowledge of nuclear weapons development, nuclear accidents, arms control treaties, Cold War history, radiation science, and the humanitarian impact of nuclear events. Context: ${ctx} Keep responses concise (2-4 sentences) but genuinely informative. Never trivialize the human cost of nuclear events.`;
 
-  // Build conversation history in Gemini format
-  const geminiHistory = chatHistory.map(m=>({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }]
-  }));
-
-  // Add current question
-  geminiHistory.push({ role:'user', parts:[{ text: q }] });
+  // Add current question to history
   chatHistory.push({role:'user', content:q});
 
   try{
-const res=await fetch(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        method:'POST',
-        headers:{
-          'Content-Type':'application/json',
-          'Authorization':`Bearer ${GROQ_API_KEY}`
-        },
-        body:JSON.stringify({
-          model:'llama3-8b-8192',
-          messages:[
-            {role:'system', content:systemPrompt},
-            ...chatHistory.slice(0,-1),
-            {role:'user', content:q}
-          ],
-          max_tokens:400,
-          temperature:0.7
-        }),
-      }
-    );
+    const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':`Bearer ${GROQ_API_KEY}`
+      },
+      body:JSON.stringify({
+        model:'llama3-8b-8192',
+        messages:[
+          {role:'system', content:systemPrompt},
+          ...chatHistory
+        ],
+        max_tokens:400,
+        temperature:0.7
+      }),
+    });
     const data=await res.json();
-    const reply=data.choices?.[0]?.message?.content || 'Unable to get a response right now.';
+    const reply=data.choices?.[0]?.message?.content||'Unable to get a response right now.';
     chatHistory.push({role:'assistant', content:reply});
-    thinking.remove(); appendMsg('ai', reply);
+    thinking.remove(); appendMsg('ai',reply);
   }catch(err){
     thinking.remove();
     appendMsg('ai','Connection error. Please check your API key and try again.');
